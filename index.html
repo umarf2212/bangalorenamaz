@@ -3,129 +3,117 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Daily Prayer Timings</title>
+    <title>Salah Timings</title>
     <style>
         :root {
             --primary: #2c3e50;
             --accent: #27ae60;
             --bg: #f4f7f6;
-            --card-bg: #ffffff;
+            --card-major: #ffffff;
+            --card-minor: #eef2f3;
         }
 
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--bg);
-            color: var(--primary);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
+        body { font-family: sans-serif; background: var(--bg); padding: 20px; color: var(--primary); }
+        .container { max-width: 600px; margin: auto; }
+        
+        #countdown-banner { 
+            background: var(--primary); color: white; padding: 20px; 
+            border-radius: 10px; text-align: center; margin-bottom: 20px; 
         }
+        .timer { font-size: 2rem; font-weight: bold; font-family: monospace; }
 
-        .container {
-            width: 90%;
-            max-width: 500px;
-            background: var(--card-bg);
-            padding: 2rem;
-            border-radius: 15px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-            text-align: center;
-        }
-
-        h1 { margin-bottom: 0.5rem; color: var(--primary); }
-        .date-display { color: #7f8c8d; margin-bottom: 2rem; font-weight: 500; }
-
-        .timing-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            text-align: left;
-        }
-
-        .timing-item {
-            padding: 12px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            border-left: 4px solid var(--accent);
-        }
-
-        .label {
-            display: block;
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            color: #95a5a6;
-        }
-
-        .time {
-            font-size: 1.2rem;
-            font-weight: bold;
-            color: var(--primary);
-        }
-
-        .error { color: #e74c3c; padding: 20px; }
-        .loading { font-style: italic; color: #bdc3c7; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .card { padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        
+        /* Major Cards */
+        .major { background: var(--card-major); border-left: 5px solid var(--accent); }
+        .minor { background: var(--card-minor); font-size: 0.9rem; }
+        
+        h2 { margin-top: 0; font-size: 1rem; color: #7f8c8d; text-transform: uppercase; }
+        .time { font-size: 1.2rem; font-weight: bold; }
     </style>
 </head>
 <body>
 
-<div class="container" id="app">
-    <div class="loading">Loading today's timings...</div>
+<div class="container">
+    <div id="countdown-banner">
+        <div>Next Prayer In</div>
+        <div class="timer" id="timer">--:--:--</div>
+        <div id="next-prayer-name">Loading...</div>
+    </div>
+
+    <div class="grid" id="prayers-grid"></div>
 </div>
 
 <script>
-    async function init() {
-        const app = document.getElementById('app');
+    async function loadSchedule() {
         const now = new Date();
-        
-        // Month Names to match your file structure (e.g., months/january.json)
-        const monthNames = [
-            "january", "february", "march", "april", "may", "june",
-            "july", "august", "september", "october", "november", "december"
+        const monthNames = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+        const response = await fetch(`months/${monthNames[now.getMonth()]}.json`);
+        const schedule = await response.json();
+        const dayData = schedule.data.find(d => parseInt(d.date) === now.getDate());
+
+        // Process times into Date objects
+        const times = [
+            { name: "Fajr", time: parseTime(dayData.predawn), type: 'major' },
+            { name: "Dhuhr", time: addMinutes(parseTime(dayData.zawal), 10), type: 'major' },
+            { name: "Asr", time: parseTime(dayData.asr_hanafi), type: 'major' },
+            { name: "Maghrib", time: parseTime(dayData.sunset), type: 'major' },
+            { name: "Isha", time: parseTime(dayData.isha), type: 'major' },
+            { name: "Sahri", time: parseTime(dayData.sahri), type: 'minor' },
+            { name: "Sunrise", time: parseTime(dayData.sunrise), type: 'minor' },
+            { name: "Zawal", time: parseTime(dayData.zawal), type: 'minor' }
         ];
-        
-        const currentMonthName = monthNames[now.getMonth()];
-        const currentDay = String(now.getDate()).padStart(2, '0');
 
-        try {
-            const response = await fetch(`months/${currentMonthName}.json`);
-            if (!response.ok) throw new Error('Schedule not found for this month');
-            
-            const schedule = await response.json();
-            const todayData = schedule.data.find(entry => entry.date === currentDay);
+        renderGrid(times);
+        startCountdown(times);
+    }
 
-            if (!todayData) throw new Error('No data for today\'s date');
-
-            app.innerHTML = `
-                <h1>${currentMonthName.charAt(0).toUpperCase() + currentMonthName.slice(1)} Timings</h1>
-                <div class="date-display">${now.toDateString()}</div>
-                <div class="timing-grid">
-                    ${renderTime("Sahri (End)", todayData.sahri)}
-                    ${renderTime("Fajr (Start)", todayData.predawn)}
-                    ${renderTime("Sunrise", todayData.sunrise)}
-                    ${renderTime("Zawal", todayData.zawal)}
-                    ${renderTime("Asr (Hanafi)", todayData.asr_hanafi)}
-                    ${renderTime("Maghrib / Sunset", todayData.sunset)}
-                    ${renderTime("Isha", todayData.isha)}
-                </div>
-            `;
-        } catch (err) {
-            app.innerHTML = `<div class="error">Error: ${err.message}</div>`;
+    function parseTime(timeStr) {
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        const date = new Date();
+        // Heuristic: If time is < 5am, it's AM. If it's a specific PM time (e.g., Asr, Maghrib), add 12 hours.
+        // This is a simple logic; adjust based on actual 24h vs 12h format expectations.
+        let h = hours;
+        if (h < 5) { /* Morning times */ }
+        else if (h < 12 && (['Asr', 'Maghrib', 'Isha'].includes(timeStr))) { /* Logic depends on input format */ }
+        // Assuming the logic: Fajr/Sahri/Sunrise are AM, Zawal/Asr/Maghrib/Isha are PM.
+        if (['3', '4', '6', '7'].includes(timeStr.split(':')[0])) {
+             if (h < 12 && !['3', '4'].includes(timeStr.split(':')[0])) h += 12; // PM adjustment
         }
+        date.setHours(h, minutes, 0);
+        return date;
     }
 
-    function renderTime(label, time) {
-        return `
-            <div class="timing-item">
-                <span class="label">${label}</span>
-                <span class="time">${time}</span>
+    function addMinutes(date, mins) { return new Date(date.getTime() + mins*60000); }
+
+    function renderGrid(times) {
+        const grid = document.getElementById('prayers-grid');
+        grid.innerHTML = times.map(t => `
+            <div class="card ${t.type}">
+                <h2>${t.name}</h2>
+                <div class="time">${t.time.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
             </div>
-        `;
+        `).join('');
     }
 
-    init();
-</script>
+    function startCountdown(times) {
+        setInterval(() => {
+            const now = new Date();
+            const future = times.filter(t => t.time > now).sort((a,b) => a.time - b.time);
+            if (future.length > 0) {
+                const next = future[0];
+                const diff = next.time - now;
+                const h = Math.floor(diff / 3600000);
+                const m = Math.floor((diff % 3600000) / 60000);
+                const s = Math.floor((diff % 60000) / 1000);
+                document.getElementById('timer').innerText = `${h}h ${m}m ${s}s`;
+                document.getElementById('next-prayer-name').innerText = `Next: ${next.name}`;
+            }
+        }, 1000);
+    }
 
+    loadSchedule();
+</script>
 </body>
 </html>
