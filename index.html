@@ -3,34 +3,129 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Page</title>
+    <title>Daily Prayer Timings</title>
     <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #27ae60;
+            --bg: #f4f7f6;
+            --card-bg: #ffffff;
+        }
+
         body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-            background-color: #f4f4f4;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            color: var(--primary);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
         }
-        h1 {
-            color: #333;
+
+        .container {
+            width: 90%;
+            max-width: 500px;
+            background: var(--card-bg);
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            text-align: center;
         }
-        button {
-            padding: 10px 15px;
-            cursor: pointer;
+
+        h1 { margin-bottom: 0.5rem; color: var(--primary); }
+        .date-display { color: #7f8c8d; margin-bottom: 2rem; font-weight: 500; }
+
+        .timing-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            text-align: left;
         }
+
+        .timing-item {
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid var(--accent);
+        }
+
+        .label {
+            display: block;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #95a5a6;
+        }
+
+        .time {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--primary);
+        }
+
+        .error { color: #e74c3c; padding: 20px; }
+        .loading { font-style: italic; color: #bdc3c7; }
     </style>
 </head>
 <body>
 
-    <h1>Hello, World!</h1>
-    <p>This is a simple HTML page.</p>
+<div class="container" id="app">
+    <div class="loading">Loading today's timings...</div>
+</div>
 
-    <button onclick="sayHello()">Click Me</button>
+<script>
+    async function init() {
+        const app = document.getElementById('app');
+        const now = new Date();
+        
+        // Month Names to match your file structure (e.g., months/january.json)
+        const monthNames = [
+            "january", "february", "march", "april", "may", "june",
+            "july", "august", "september", "october", "november", "december"
+        ];
+        
+        const currentMonthName = monthNames[now.getMonth()];
+        const currentDay = String(now.getDate()).padStart(2, '0');
 
-    <script>
-        function sayHello() {
-            alert("Hello! You clicked the button.");
+        try {
+            const response = await fetch(`months/${currentMonthName}.json`);
+            if (!response.ok) throw new Error('Schedule not found for this month');
+            
+            const schedule = await response.json();
+            const todayData = schedule.data.find(entry => entry.date === currentDay);
+
+            if (!todayData) throw new Error('No data for today\'s date');
+
+            app.innerHTML = `
+                <h1>${currentMonthName.charAt(0).toUpperCase() + currentMonthName.slice(1)} Timings</h1>
+                <div class="date-display">${now.toDateString()}</div>
+                <div class="timing-grid">
+                    ${renderTime("Sahri (End)", todayData.sahri)}
+                    ${renderTime("Fajr (Start)", todayData.predawn)}
+                    ${renderTime("Sunrise", todayData.sunrise)}
+                    ${renderTime("Zawal", todayData.zawal)}
+                    ${renderTime("Asr (Hanafi)", todayData.asr_hanafi)}
+                    ${renderTime("Maghrib / Sunset", todayData.sunset)}
+                    ${renderTime("Isha", todayData.isha)}
+                </div>
+            `;
+        } catch (err) {
+            app.innerHTML = `<div class="error">Error: ${err.message}</div>`;
         }
-    </script>
+    }
+
+    function renderTime(label, time) {
+        return `
+            <div class="timing-item">
+                <span class="label">${label}</span>
+                <span class="time">${time}</span>
+            </div>
+        `;
+    }
+
+    init();
+</script>
 
 </body>
 </html>
