@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Namaz Rings</string>
+    <string name="widget_description">Bengaluru prayer times with a ring counting down to the next namaz</string>
+    <string name="widget_content_description">Today’s five namaz times for Bengaluru. Tap to open Namaz Rings.</string>
+</resources>
