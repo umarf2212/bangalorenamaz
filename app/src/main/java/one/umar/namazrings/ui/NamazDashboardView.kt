@@ -5,10 +5,13 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
+import android.os.Build
 import android.view.MotionEvent
 import android.view.View
+import android.view.WindowInsets
 import one.umar.namazrings.data.PrayerSnapshot
 import one.umar.namazrings.data.SnapshotProvider
+import kotlin.math.max
 import kotlin.math.min
 
 class NamazDashboardView(context: Context) : View(context) {
@@ -27,6 +30,15 @@ class NamazDashboardView(context: Context) : View(context) {
     init {
         setBackgroundColor(NamazPalette.CREAM)
         contentDescription = "Namaz timings and countdown rings for Bengaluru"
+        setOnApplyWindowInsetsListener { _, insets ->
+            applySystemBarInsets(insets)
+            insets
+        }
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        requestApplyInsets()
     }
 
     fun refresh() {
@@ -36,13 +48,18 @@ class NamazDashboardView(context: Context) : View(context) {
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        val w = width.toFloat()
-        val h = height.toFloat()
+        val w = (width - paddingLeft - paddingRight).toFloat()
+        val h = (height - paddingTop - paddingBottom).toFloat()
+        if (w <= 0f || h <= 0f) return
+
+        canvas.save()
+        canvas.translate(paddingLeft.toFloat(), paddingTop.toFloat())
         val side = dp(22f)
 
         drawHeader(canvas, side)
         drawHero(canvas, side, w - side)
         drawPrayerList(canvas, side, w - side, h)
+        canvas.restore()
     }
 
     private fun drawHeader(canvas: Canvas, x: Float) {
@@ -84,11 +101,21 @@ class NamazDashboardView(context: Context) : View(context) {
         paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         paint.color = NamazPalette.WHITE
         paint.textSize = sp(23f)
-        canvas.drawText(formatTime(nextRing.moment.at), centerX, centerY + dp(2f), paint)
+        canvas.drawText(
+            formatTime(nextRing.moment.at),
+            centerX,
+            centeredBaseline(centerY - dp(7f)),
+            paint,
+        )
         paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
         paint.color = 0xB8FFFFFF.toInt()
         paint.textSize = sp(10f)
-        canvas.drawText(formatMeridiem(nextRing.moment.at), centerX, centerY + dp(23f), paint)
+        canvas.drawText(
+            formatMeridiem(nextRing.moment.at),
+            centerX,
+            centeredBaseline(centerY + dp(18f)),
+            paint,
+        )
 
         val textX = left + dp(155f)
         paint.textAlign = Paint.Align.LEFT
@@ -115,7 +142,12 @@ class NamazDashboardView(context: Context) : View(context) {
         paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
         paint.color = 0xD8FFFFFF.toInt()
         paint.textSize = sp(10.5f)
-        canvas.drawText("Ring empties as the next prayer approaches", (left + right) / 2f, bottom - dp(24f), paint)
+        canvas.drawText(
+            "Ring empties as the next prayer approaches",
+            (left + right) / 2f,
+            centeredBaseline(bottom - dp(28.5f)),
+            paint,
+        )
     }
 
     private fun drawPrayerList(canvas: Canvas, left: Float, right: Float, viewHeight: Float) {
@@ -147,7 +179,12 @@ class NamazDashboardView(context: Context) : View(context) {
             paint.typeface = Typeface.create(Typeface.DEFAULT, if (ring.isNext) Typeface.BOLD else Typeface.NORMAL)
             paint.color = NamazPalette.FOREST
             paint.textSize = sp(14f)
-            canvas.drawText(ring.moment.prayer.displayName, left + dp(58f), cy + dp(5f), paint)
+            canvas.drawText(
+                ring.moment.prayer.displayName,
+                left + dp(58f),
+                centeredBaseline(cy),
+                paint,
+            )
 
             paint.textAlign = Paint.Align.RIGHT
             paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
@@ -156,7 +193,7 @@ class NamazDashboardView(context: Context) : View(context) {
             canvas.drawText(
                 "${formatTime(ring.moment.at)} ${formatMeridiem(ring.moment.at)}",
                 right - dp(18f),
-                cy + dp(5f),
+                centeredBaseline(cy),
                 paint,
             )
         }
@@ -170,7 +207,12 @@ class NamazDashboardView(context: Context) : View(context) {
         paint.color = NamazPalette.WHITE
         paint.textSize = sp(13f)
         val label = if (canPinWidget) "ADD WIDGET TO HOME SCREEN" else "ADD FROM YOUR WIDGET PICKER"
-        canvas.drawText(label, (left + right) / 2f, buttonTop + dp(32f), paint)
+        canvas.drawText(
+            label,
+            (left + right) / 2f,
+            centeredBaseline(buttonTop + buttonHeight / 2f),
+            paint,
+        )
     }
 
     private fun drawMiniRing(canvas: Canvas, cx: Float, cy: Float, remaining: Float, color: Int) {
@@ -187,7 +229,9 @@ class NamazDashboardView(context: Context) : View(context) {
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (event.action == MotionEvent.ACTION_UP && buttonBounds.contains(event.x, event.y)) {
+        val contentX = event.x - paddingLeft
+        val contentY = event.y - paddingTop
+        if (event.action == MotionEvent.ACTION_UP && buttonBounds.contains(contentX, contentY)) {
             performClick()
             if (canPinWidget) onAddWidget?.invoke()
             return true
@@ -199,6 +243,49 @@ class NamazDashboardView(context: Context) : View(context) {
         super.performClick()
         return true
     }
+
+    private fun applySystemBarInsets(insets: WindowInsets) {
+        val left: Int
+        val top: Int
+        val right: Int
+        val bottom: Int
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val safeInsets = insets.getInsets(
+                WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout(),
+            )
+            left = safeInsets.left
+            top = safeInsets.top
+            right = safeInsets.right
+            bottom = safeInsets.bottom
+        } else {
+            @Suppress("DEPRECATION")
+            left = insets.systemWindowInsetLeft
+            @Suppress("DEPRECATION")
+            right = insets.systemWindowInsetRight
+            @Suppress("DEPRECATION")
+            var safeTop = insets.systemWindowInsetTop
+            @Suppress("DEPRECATION")
+            var safeBottom = insets.systemWindowInsetBottom
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                safeTop = max(safeTop, insets.displayCutout?.safeInsetTop ?: 0)
+                safeBottom = max(safeBottom, insets.displayCutout?.safeInsetBottom ?: 0)
+            }
+            top = safeTop
+            bottom = safeBottom
+        }
+
+        if (
+            paddingLeft != left || paddingTop != top ||
+            paddingRight != right || paddingBottom != bottom
+        ) {
+            setPadding(left, top, right, bottom)
+        }
+    }
+
+    private fun centeredBaseline(centerY: Float): Float =
+        centerY - (paint.ascent() + paint.descent()) / 2f
 
     private fun dp(value: Float): Float = value * density
 
